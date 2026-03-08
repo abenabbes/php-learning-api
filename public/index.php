@@ -8,7 +8,13 @@ use App\Controller\UserController;
 use Dotenv\Dotenv;
 
 // Chargement des variables d'environnement
-$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+// Détecte l'environnement et charge le bon fichier .env
+// APP_ENV=docker → chargé depuis docker-compose.yml
+// Sinon → .env normal (WAMP)
+$appEnv  = getenv('APP_ENV');
+$envFile = $appEnv === 'docker' ? '.env.docker' : '.env';
+
+$dotenv = Dotenv::createImmutable(__DIR__ . '/../', $envFile);
 $dotenv->load();
 
 $uri      = $_SERVER['REQUEST_URI'];
@@ -16,10 +22,15 @@ $method   = $_SERVER['REQUEST_METHOD'];
 $path     = parse_url($uri, PHP_URL_PATH);
 $segments = explode('/', trim($path, '/'));
 
-// URL : /php-learning-api/public/index.php/users
-$route    = $segments[3] ?? null;  // "users"
-$param1   = $segments[4] ?? null;  // "3" ou "name"
-$param2   = $segments[5] ?? null;  // "Alice" si route /users/name/Alice
+// Détecte automatiquement le bon index selon l'environnement
+// Docker  : /users/1        → segments[0] = users
+// WAMP    : /php-learning-api/public/index.php/users/1 → segments[3] = users
+$appEnv = getenv('APP_ENV');
+$offset = $appEnv === 'docker' ? 0 : 3;
+
+$route  = $segments[$offset]     ?? null;
+$param1 = $segments[$offset + 1] ?? null;
+$param2 = $segments[$offset + 2] ?? null;
 
 $userController = new UserController();
 

@@ -1,0 +1,87 @@
+# Version de la syntaxe Docker Compose
+services:
+
+  # ============================================
+  # SERVICE PHP-FPM — Exécution du code PHP
+  # ============================================
+  php:
+    # Construire l'image depuis notre Dockerfile
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    # Variable d'environnement pour charger .env.docker
+    environment:
+      APP_ENV: docker
+    # Montage du code source dans le conteneur
+    # Toute modification locale est immédiatement visible
+    volumes:
+      - .:/var/www/html
+    networks:
+      - app-network
+    # PHP-FPM démarre seulement quand MySQL est prêt
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  # ============================================
+  # SERVICE NGINX — Serveur HTTP
+  # ============================================
+  nginx:
+    # Image officielle Nginx légère
+    image: nginx:alpine
+    # Port 8080 sur ton PC → port 80 dans le conteneur
+    # On évite le port 80 car WAMP l'utilise déjà
+    ports:
+      - "8080:80"
+    volumes:
+      # Code source
+      - .:/var/www/html
+      # Notre configuration Nginx personnalisée
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - app-network
+    depends_on:
+      - php
+
+  # ============================================
+  # SERVICE MYSQL — Base de données
+  # ============================================
+  mysql:
+    # Image officielle MySQL 8.0
+    image: mysql:8.0
+    environment:
+      # Mot de passe root MySQL
+      MYSQL_ROOT_PASSWORD: root
+      # Base de données créée automatiquement au démarrage
+      MYSQL_DATABASE: projet_from_scratch
+      # Utilisateur applicatif (pas root !)
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+    # Port 3307 sur ton PC → port 3306 dans le conteneur
+    # On évite 3306 car WAMP MySQL l'utilise déjà
+    ports:
+      - "3307:3306"
+    # Volume nommé — persiste les données même si le conteneur est supprimé
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    # Vérification que MySQL est vraiment prêt avant de démarrer PHP
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ============================================
+# RÉSEAU — Communication entre conteneurs
+# ============================================
+networks:
+  app-network:
+    driver: bridge
+
+# ============================================
+# VOLUMES — Persistance des données MySQL
+# ============================================
+volumes:
+  mysql_data:
